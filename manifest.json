@@ -1,0 +1,9 @@
+{
+  "name": "第4次スパロボ 改造エディタ",
+  "short_name": "SRW4改造",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1a1a1a",
+  "theme_color": "#1a1a1a",
+  "icons": [{ "src": "./icon.png", "sizes": "180x180", "type": "image/png" }]
+}

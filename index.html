@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="format-detection" content="telephone=no">
+<meta name="apple-mobile-web-app-title" content="SRW4改造">
+<link rel="apple-touch-icon" href="./icon.png">
+<link rel="manifest" href="./manifest.json">
+<title>SRW4 Editor</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif; background: #1a1a1a; color: #e0e0e0; }
+  body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  header { padding: 1rem; background: #2a2a2a; border-bottom: 1px solid #3a3a3a; }
+  header h1 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+  main { padding: 1rem; }
+  #splash { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 50vh; gap: 1rem; }
+  #splash .spinner { width: 36px; height: 36px; border: 3px solid #3a3a3a; border-top-color: #6db; border-radius: 50%; animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #status { font-size: 0.9rem; color: #aaa; min-height: 1.2em; text-align: center; }
+  #dropzone { display: none; padding: 2rem 1rem; border: 2px dashed #4a4a4a; border-radius: 8px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; }
+  #dropzone.ready { display: block; }
+  #dropzone:hover, #dropzone.dragover { border-color: #6db; background: #222a28; }
+  #dropzone input { display: none; }
+  #dropzone p { margin: 0.3rem 0; }
+  #dropzone .hint { color: #888; font-size: 0.85rem; }
+  #result { display: none; margin-top: 1rem; padding: 1rem; background: #222; border-radius: 8px; }
+  #result.show { display: block; }
+  #result h2 { margin: 0 0 0.5rem 0; font-size: 1rem; color: #6db; }
+  #result pre { margin: 0; font-size: 0.75rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.5rem 0; }
+  .stat { padding: 0.5rem; background: #2a2a2a; border-radius: 4px; }
+  .stat .label { font-size: 0.75rem; color: #888; }
+  .stat .value { font-size: 1.2rem; color: #6db; font-weight: 600; }
+  .tabs { display: flex; gap: 0.25rem; margin: 0.75rem 0 0.5rem 0; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: 0 0 auto; min-width: 72px; padding: 0.65rem 0.7rem; min-height: 44px; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 6px; color: #aaa; font-size: 0.9rem; cursor: pointer; text-align: center; white-space: nowrap; }
+  .tab.active { background: #1a3a40; border-color: #6db; color: #6db; font-weight: 600; }
+  .search-wrap { margin: 0.5rem 0; }
+  .search-wrap input { width: 100%; padding: 0.65rem 0.75rem; min-height: 44px; background: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 6px; color: #e0e0e0; font-size: 1rem; }
+  .search-wrap input:focus { outline: none; border-color: #6db; }
+  .list-meta { font-size: 0.8rem; color: #888; margin: 0.25rem 0 0.5rem 0; }
+  .list { max-height: 60vh; overflow-y: auto; -webkit-overflow-scrolling: touch; border: 1px solid #2a2a2a; border-radius: 6px; }
+  .row { display: flex; gap: 0.5rem; padding: 0.6rem 0.75rem; min-height: 48px; border-bottom: 1px solid #2a2a2a; align-items: center; cursor: pointer; }
+  .row:last-child { border-bottom: none; }
+  .row:hover, .row:active { background: #222a28; }
+  .row-name { flex: 1 1 auto; font-size: 0.95rem; color: #e0e0e0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-stats { flex: 0 0 auto; font-size: 0.75rem; color: #888; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .row-stats span { display: inline-block; margin-left: 0.4rem; }
+  .row-stats span.k { color: #6db; }
+  .row.dirty { background: #2a2218; }
+  .row.dirty::before { content: '●'; color: #fa6; margin-right: 0.4rem; font-size: 0.7rem; }
+  .empty { padding: 1rem; text-align: center; color: #888; }
+
+  /* Editor */
+  #editor { display: none; }
+  #editor.show { display: block; }
+  .editor-header { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
+  .editor-header h2 { flex: 1; margin: 0; font-size: 1.05rem; color: #6db; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn { padding: 0.55rem 0.9rem; min-height: 44px; background: #2a2a2a; color: #ddd; border: 1px solid #3a3a3a; border-radius: 6px; font-size: 0.9rem; cursor: pointer; }
+  .btn:hover { background: #333; }
+  .btn-primary { background: #1a3a40; color: #6db; border-color: #6db; }
+  .btn-primary:hover { background: #1f4a52; }
+  .btn-danger { background: #3a1a1a; color: #f88; border-color: #f88; }
+  .btn-icon { padding: 0.4rem 0.6rem; min-height: 36px; font-size: 0.85rem; }
+  .field-group { background: #222; border-radius: 6px; padding: 0.75rem; margin-bottom: 0.6rem; }
+  .field-group > .group-title { font-size: 0.85rem; color: #6db; margin-bottom: 0.4rem; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.5rem; }
+  .field { display: flex; flex-direction: column; gap: 0.2rem; }
+  .field label { font-size: 0.72rem; color: #888; }
+  .field input, .field select { padding: 0.5rem; background: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 4px; color: #e0e0e0; font-size: 0.95rem; min-height: 40px; }
+  .field input:focus, .field select:focus { outline: none; border-color: #6db; }
+  .terrain-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
+  .slot-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 0.4rem; margin-bottom: 0.4rem; align-items: end; }
+  .slot-row.spirit { grid-template-columns: 2fr 1fr auto; }
+  .add-slot { margin-top: 0.3rem; }
+</style>
+</head>
+<body>
+<header><h1>第4次スーパーロボット大戦 改造エディタ (v0.6 / 武器統合)</h1></header>
+<main>
+  <div id="splash">
+    <div class="spinner"></div>
+    <div id="status">Pyodide 初期化中...</div>
+  </div>
+  <label id="dropzone" for="rom-input">
+    <p>📂 ROMファイル (.smc) をここにドロップ</p>
+    <p class="hint">またはタップして選択 / 3MB V1.1 のみ対応</p>
+    <input id="rom-input" type="file" accept=".smc,.sfc">
+  </label>
+  <section id="result">
+    <div class="stats" style="grid-template-columns: 1fr 1fr 1fr;">
+      <div class="stat"><div class="label">パイロット</div><div class="value" id="pilot-count">-</div></div>
+      <div class="stat"><div class="label">ユニット</div><div class="value" id="unit-count">-</div></div>
+      <div class="stat"><div class="label">武器</div><div class="value" id="weapon-count">-</div></div>
+    </div>
+    <div style="display:flex;gap:0.5rem;align-items:center;margin:0.5rem 0;">
+      <button class="btn btn-primary" id="download-btn" style="flex:1;">改造ROMをダウンロード</button>
+      <button class="btn" id="reload-btn" title="別のROMを読み込む">別ROMを読込</button>
+    </div>
+    <div class="list-meta" id="dirty-meta" style="color:#fa6;"></div>
+    <div class="tabs" role="tablist">
+      <div class="tab active" id="tab-pilots" data-tab="pilots" role="tab">パイロット</div>
+      <div class="tab" id="tab-units" data-tab="units" role="tab">ユニット</div>
+      <div class="tab" id="tab-weapons" data-tab="weapons" role="tab">武器</div>
+      <div class="tab" id="tab-parts" data-tab="parts" role="tab">パーツ</div>
+      <div class="tab" id="tab-mods" data-tab="mods" role="tab">改造</div>
+      <div class="tab" id="tab-birthdays" data-tab="birthdays" role="tab">誕生日</div>
+    </div>
+    <div class="search-wrap">
+      <input id="search" type="search" placeholder="名前で検索 (例: アムロ, νガンダム)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    </div>
+    <div class="list-meta" id="list-meta"></div>
+    <div class="list" id="list"></div>
+  </section>
+
+  <section id="editor">
+    <div class="editor-header">
+      <button class="btn" id="editor-back">← 一覧</button>
+      <h2 id="editor-title">編集</h2>
+      <button class="btn btn-primary" id="editor-save">保存</button>
+    </div>
+    <div id="editor-body"></div>
+  </section>
+
+  <datalist id="spirit-names"></datalist>
+  <datalist id="skill-names"></datalist>
+</main>
+
+<pre id="debug" style="margin:1rem;padding:0.5rem;background:#100;color:#faa;font-size:0.7rem;max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all;display:none;"></pre>
+<script>
+// グローバルエラー捕捉（type=moduleのscript内エラーもここで拾える）
+const debugEl = document.getElementById('debug');
+function dbg(msg, isError) {
+  debugEl.style.display = 'block';
+  debugEl.style.color = isError ? '#faa' : '#afa';
+  const line = document.createElement('div');
+  line.textContent = '[' + new Date().toISOString().slice(11,19) + '] ' + msg;
+  if (isError) line.style.color = '#faa';
+  debugEl.appendChild(line);
+  debugEl.scrollTop = debugEl.scrollHeight;
+}
+window.addEventListener('error', e => {
+  dbg('window error: ' + (e.message || e.error) + ' @ ' + (e.filename || '?') + ':' + (e.lineno || '?'), true);
+});
+window.addEventListener('unhandledrejection', e => {
+  dbg('unhandled rejection: ' + (e.reason && (e.reason.stack || e.reason.message || e.reason)), true);
+});
+window.__dbg = dbg;
+dbg('basic JS loaded; navigator=' + navigator.userAgent.slice(0, 80));
+</script>
+<script type="module">
+import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.mjs";
+
+window.__dbg('ESM import OK (pyodide.mjs fetched)');
+
+const status = document.getElementById('status');
+const splash = document.getElementById('splash');
+const dropzone = document.getElementById('dropzone');
+const result = document.getElementById('result');
+const listEl = document.getElementById('list');
+const listMetaEl = document.getElementById('list-meta');
+const searchEl = document.getElementById('search');
+
+const state = {
+  tab: 'pilots',
+  query: '',
+  pilots: [],
+  units: [],
+  weapons: [],
+  parts: [],
+  mods: null,        // 改造テーブル一式（単一オブジェクト）
+  modsDirty: false,
+  birthdays: [],
+  weaponsByOffset: {},  // $XXXXX → weapon オブジェクト
+  romBytes: null,
+  romName: '',
+};
+
+function setStatus(msg) {
+  status.textContent = msg;
+  window.__dbg(msg);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderList() {
+  const q = state.query.trim().toLowerCase();
+  if (state.tab === 'mods') {
+    listMetaEl.textContent = '';
+    listEl.innerHTML = `<div class="row" data-key="mods"><div class="row-name">改造テーブルを編集（強化値・費用・バリア）</div>`
+      + `<div class="row-stats">${state.modsDirty ? '<span style="color:#fa6">●変更あり</span>' : ''}</div></div>`;
+    return;
+  }
+  const src = state.tab === 'pilots' ? state.pilots
+            : state.tab === 'units' ? state.units
+            : state.tab === 'weapons' ? state.weapons
+            : state.tab === 'parts' ? state.parts
+            : state.tab === 'birthdays' ? state.birthdays
+            : [];
+  const filtered = q ? src.filter(x => ((x.name || x.label || '')).toLowerCase().includes(q)) : src;
+
+  listMetaEl.textContent = `${filtered.length} / ${src.length} 件`;
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = '<div class="empty">該当なし</div>';
+    return;
+  }
+
+  // テンプレ生成
+  let html = '';
+  if (state.tab === 'pilots') {
+    for (const p of filtered) {
+      const cls = p._dirty ? 'row dirty' : 'row';
+      html += `<div class="${cls}" data-key="${escapeHtml(p.name)}">`
+        + `<div class="row-name">${escapeHtml(p.name)}</div>`
+        + `<div class="row-stats">`
+        + `<span><span class="k">近</span>${p.melee_attack}</span>`
+        + `<span><span class="k">遠</span>${p.ranged_attack}</span>`
+        + `<span><span class="k">SP</span>${p.sp}</span>`
+        + `</div></div>`;
+    }
+  } else if (state.tab === 'units') {
+    for (const u of filtered) {
+      const cls = u._dirty ? 'row dirty' : 'row';
+      const mark = u.is_enemy ? ' <span style="color:#e66;font-size:0.7rem;">敵</span>' : '';
+      html += `<div class="${cls}" data-key="${escapeHtml(u.name)}">`
+        + `<div class="row-name">${escapeHtml(u.name)}${mark}</div>`
+        + `<div class="row-stats">`
+        + `<span><span class="k">HP</span>${u.hp}</span>`
+        + `<span><span class="k">EN</span>${u.en}</span>`
+        + `<span><span class="k">装</span>${u.armor}</span>`
+        + `</div></div>`;
+    }
+  } else if (state.tab === 'parts') {
+    for (const p of filtered) {
+      const cls = p._dirty ? 'row dirty' : 'row';
+      const eff = [];
+      if (p.move) eff.push(`移+${p.move}`);
+      if (p.mobility) eff.push(`運+${p.mobility}`);
+      if (p.limit_reaction) eff.push(`限+${p.limit_reaction}`);
+      if (p.armor) eff.push(`装+${p.armor}`);
+      if (p.hp) eff.push(`HP+${p.hp}`);
+      if (p.barrier_type) eff.push(`バリア${p.barrier_type}`);
+      html += `<div class="${cls}" data-key="${p.part_id}">`
+        + `<div class="row-name">${escapeHtml(p.name)}</div>`
+        + `<div class="row-stats">${eff.join(' ') || '効果なし'}</div></div>`;
+    }
+  } else if (state.tab === 'birthdays') {
+    for (const b of filtered) {
+      const cls = b._dirty ? 'row dirty' : 'row';
+      const sp = (b.spirits || []).map(s => state.spiritNames?.[s.spirit_id] || s.spirit_id).slice(0, 3).join('・');
+      html += `<div class="${cls}" data-key="${b.entry_id}">`
+        + `<div class="row-name">${escapeHtml(b.label)}</div>`
+        + `<div class="row-stats">${escapeHtml(sp)}…</div></div>`;
+    }
+  } else {
+    for (const w of filtered) {
+      const cls = w._dirty ? 'row dirty' : 'row';
+      html += `<div class="${cls}" data-key="${escapeHtml(w.offset)}">`
+        + `<div class="row-name">${escapeHtml(w.name)} <span style="color:#666;font-size:0.75rem;">(${w.offset} W${w.weapon_id})</span></div>`
+        + `<div class="row-stats">`
+        + `<span><span class="k">威</span>${w.power}</span>`
+        + `<span><span class="k">命</span>${w.accuracy >= 0 ? '+' : ''}${w.accuracy}</span>`
+        + `<span><span class="k">弾</span>${w.ammo}</span>`
+        + `</div></div>`;
+    }
+  }
+  listEl.innerHTML = html;
+}
+
+// タブ
+document.querySelectorAll('.tab').forEach(el => {
+  el.addEventListener('click', () => {
+    state.tab = el.dataset.tab;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === el));
+    const ph = state.tab === 'pilots' ? '名前で検索 (例: アムロ, シーブック)'
+            : state.tab === 'units'  ? '名前で検索 (敵含む全機。例: グール, サイコガンダム)'
+            : state.tab === 'weapons' ? '名前で検索 (例: ビームライフル, ファンネル)'
+            : state.tab === 'parts'  ? 'パーツ名で検索'
+            : state.tab === 'birthdays' ? '誕生日で検索 (例: 8/12)'
+            :                          '';
+    searchEl.placeholder = ph;
+    renderList();
+  });
+});
+
+// 検索
+searchEl.addEventListener('input', (e) => {
+  state.query = e.target.value;
+  renderList();
+});
+
+// 行クリック → エディタを開く
+listEl.addEventListener('click', (e) => {
+  const row = e.target.closest('.row');
+  if (!row) return;
+  const key = row.dataset.key;
+  openEditor(state.tab, key);
+});
+
+// === Editor ===
+const editorEl = document.getElementById('editor');
+const editorBodyEl = document.getElementById('editor-body');
+const editorTitleEl = document.getElementById('editor-title');
+
+document.getElementById('editor-back').addEventListener('click', closeEditor);
+document.getElementById('editor-save').addEventListener('click', saveEditor);
+document.getElementById('editor-body').addEventListener('click', onEditorClick);
+
+function openEditor(type, key) {
+  if (type === 'mods') {
+    state.editing = { type: 'mods', index: 0, working: JSON.parse(JSON.stringify(state.mods)) };
+    editorTitleEl.textContent = '改造テーブル';
+    renderModsEditor(state.editing.working);
+    result.classList.remove('show');
+    editorEl.classList.add('show');
+    window.scrollTo(0, 0);
+    return;
+  }
+  const src = type === 'pilots' ? state.pilots
+            : type === 'units' ? state.units
+            : type === 'parts' ? state.parts
+            : type === 'birthdays' ? state.birthdays
+            : state.weapons;
+  // weapons は key=offset、parts/birthdays は数値ID、それ以外は name で識別
+  const idx = type === 'weapons' ? src.findIndex(x => x.offset === key)
+            : type === 'parts' ? src.findIndex(x => String(x.part_id) === key)
+            : type === 'birthdays' ? src.findIndex(x => String(x.entry_id) === key)
+            : src.findIndex(x => x.name === key);
+  if (idx < 0) return;
+  state.editing = {
+    type,
+    index: idx,
+    working: JSON.parse(JSON.stringify(src[idx])),
+  };
+  const titleName = (src[idx].name || src[idx].label)
+    + (type === 'weapons' ? ` (${src[idx].offset} W${src[idx].weapon_id})` : '');
+  editorTitleEl.textContent = titleName;
+  if (type === 'pilots') {
+    renderPilotEditor(state.editing.working);
+  } else if (type === 'units') {
+    renderUnitEditor(state.editing.working);
+  } else if (type === 'parts') {
+    renderPartEditor(state.editing.working);
+  } else if (type === 'birthdays') {
+    renderBirthdayEditor(state.editing.working);
+  } else {
+    renderWeaponEditor(state.editing.working);
+  }
+  result.classList.remove('show');
+  editorEl.classList.add('show');
+  window.scrollTo(0, 0);
+}
+
+function closeEditor() {
+  state.editing = null;
+  editorEl.classList.remove('show');
+  result.classList.add('show');
+  editorBodyEl.innerHTML = '';
+}
+
+function saveEditor() {
+  if (!state.editing) return;
+  const { type, index, working } = state.editing;
+
+  if (type === 'mods') {
+    collectGenericForm(working);
+    state.mods = working;
+    state.modsDirty = true;
+    renderList();
+    updateDirtyMeta();
+    closeEditor();
+    setStatus('保存: 改造テーブル (メモリ上、ダウンロードでROMに焼き込み)');
+    return;
+  }
+  if (type === 'pilots') {
+    collectPilotForm(working);
+  } else if (type === 'units') {
+    collectUnitForm(working);
+  } else if (type === 'parts' || type === 'birthdays') {
+    collectGenericForm(working);
+  } else {
+    collectWeaponForm(working);
+  }
+
+  const src = type === 'pilots' ? state.pilots
+            : type === 'units' ? state.units
+            : type === 'parts' ? state.parts
+            : type === 'birthdays' ? state.birthdays
+            : state.weapons;
+  working._dirty = true;
+  src[index] = working;
+  if (type === 'weapons') {
+    state.weaponsByOffset[working.offset] = working;
+    state.weaponsByWid[working.weapon_id] = working;
+  }
+  renderList();
+  updateDirtyMeta();
+  closeEditor();
+  setStatus(`保存: ${working.name || working.label} (メモリ上、ダウンロードでROMに焼き込み)`);
+}
+
+// data-key のドットパス/配列添字を汎用回収（parts / birthdays / mods 用）
+function collectGenericForm(obj) {
+  editorBodyEl.querySelectorAll('input[data-key]:not([readonly]), select[data-key]').forEach(el => {
+    const key = el.dataset.key;
+    let v = el.value;
+    if (el.type === 'number' || el.dataset.type === 'int') {
+      v = parseInt(v, 10) || 0;
+    } else if (el.tagName === 'SELECT' && /^-?\d+$/.test(v)) {
+      v = parseInt(v, 10);
+    }
+    setByDotted(obj, key, v);
+  });
+}
+
+function dirtyCount() {
+  const dp = state.pilots.filter(p => p._dirty).length;
+  const du = state.units.filter(u => u._dirty).length;
+  const dw = state.weapons.filter(w => w._dirty).length;
+  const dx = state.parts.filter(p => p._dirty).length
+           + state.birthdays.filter(b => b._dirty).length
+           + (state.modsDirty ? 1 : 0);
+  return { dp, du, dw, dx };
+}
+
+function updateDirtyMeta() {
+  const { dp, du, dw, dx } = dirtyCount();
+  const el = document.getElementById('dirty-meta');
+  if (dp + du + dw + dx === 0) {
+    el.textContent = '未編集（読み込んだ ROM をそのままダウンロードできます）';
+    el.style.color = '#888';
+  } else {
+    el.textContent = `編集中: パイロット ${dp} / ユニット ${du} / 武器 ${dw} / その他 ${dx} → ダウンロードで焼き込み`;
+    el.style.color = '#fa6';
+  }
+}
+
+async function downloadModifiedROM() {
+  if (!state.romBytes) { setStatus('ROM がロードされていません'); return; }
+  setStatus('改造ROM 書き出し中...');
+  try {
+    const pilotsClean = state.pilots.map(p => { const { _dirty, ...rest } = p; return rest; });
+    const unitsClean = state.units.map(u => { const { _dirty, ...rest } = u; return rest; });
+    const weaponsClean = state.weapons.map(w => { const { _dirty, ...rest } = w; return rest; });
+    const partsClean = state.parts.map(p => { const { _dirty, ...rest } = p; return rest; });
+    pyodide.globals.set('rom_orig_js', state.romBytes);
+    pyodide.globals.set('pilots_json', JSON.stringify({ rom_version: 'V1.1', pilots: pilotsClean }));
+    pyodide.globals.set('units_json', JSON.stringify({ units: unitsClean }));
+    pyodide.globals.set('weapons_json', JSON.stringify({ rom_version: 'V1.1', weapons: weaponsClean }));
+    pyodide.globals.set('parts_json', JSON.stringify({ parts: partsClean, barrier_power: state.partsMeta.barrier_power, barrier_en: state.partsMeta.barrier_en }));
+    pyodide.globals.set('mods_json', JSON.stringify(state.mods));
+    pyodide.globals.set('birthdays_json', JSON.stringify({ birthdays: state.birthdays.map(b => { const { _dirty, ...rest } = b; return rest; }) }));
+    const resultProxy = pyodide.runPython(`apply_all(bytes(rom_orig_js.to_py()), pilots_json, units_json, weapons_json, parts_json, mods_json, birthdays_json)`);
+    // Python bytes -> JS bytes
+    const newBytes = resultProxy.toJs();
+    resultProxy.destroy?.();
+
+    if (newBytes.length !== 3_145_728) {
+      throw new Error(`改造ROMサイズ異常: ${newBytes.length}`);
+    }
+
+    const blob = new Blob([newBytes], { type: 'application/octet-stream' });
+    const baseName = (state.romName || 'srw4').replace(/\.(smc|sfc)$/i, '');
+    const outName = `${baseName}_modified.smc`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = outName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setStatus(`ダウンロード: ${outName} (${newBytes.length.toLocaleString()} bytes)`);
+  } catch (e) {
+    console.error(e);
+    setStatus('書き出し失敗: ' + e.message);
+    window.__dbg('apply_all 失敗: ' + (e.stack || e.message), true);
+  }
+}
+
+document.getElementById('download-btn').addEventListener('click', downloadModifiedROM);
+document.getElementById('reload-btn').addEventListener('click', () => {
+  // 編集データ破棄して dropzone を再表示（同じROMでもいいし、別ROMでもいい）
+  if (dirtyCount().dp + dirtyCount().du > 0) {
+    if (!confirm('編集中のデータは破棄されます。よろしいですか？')) return;
+  }
+  state.pilots = [];
+  state.units = [];
+  state.weapons = [];
+  state.parts = [];
+  state.mods = null;
+  state.modsDirty = false;
+  state.birthdays = [];
+  state.romBytes = null;
+  state.romName = '';
+  result.classList.remove('show');
+  document.getElementById('rom-input').value = '';
+  dropzone.classList.add('ready');
+  setStatus('ROM をドロップしてください');
+});
+
+const TERRAIN_RANKS = ['-', 'D', 'C', 'B', 'A', 'S'];
+
+function numField(label, key, value, min, max) {
+  return `<div class="field"><label>${label}</label>`
+    + `<input type="number" data-key="${key}" value="${value}" min="${min}" max="${max}" inputmode="numeric"></div>`;
+}
+
+function terrainSelect(key, value) {
+  return `<select data-key="${key}">`
+    + TERRAIN_RANKS.map(r => `<option value="${r}"${r === value ? ' selected' : ''}>${r}</option>`).join('')
+    + `</select>`;
+}
+
+function renderPilotEditor(p) {
+  const sp = p.spirits || [];
+  const sk = p.skills || [];
+  let html = '';
+
+  // 基本情報
+  html += `<div class="field-group"><div class="group-title">基本情報</div><div class="grid">`;
+  html += numField('顔ID (face_id)', 'face_id', p.face_id, 0, 255);
+  html += numField('登場作品 (source_work)', 'source_work', p.source_work, 0, 255);
+  html += numField('所属 (affiliation)', 'affiliation', p.affiliation, 0, 255);
+  html += numField('撃破経験値', 'defeat_exp', p.defeat_exp, 0, 255);
+  html += numField('SP', 'sp', p.sp, 0, 255);
+  html += `</div></div>`;
+
+  // 能力値
+  html += `<div class="field-group"><div class="group-title">基礎ステータス</div><div class="grid">`;
+  html += numField('近距離攻撃', 'melee_attack', p.melee_attack, 0, 255);
+  html += numField('遠距離攻撃', 'ranged_attack', p.ranged_attack, 0, 255);
+  html += numField('命中', 'accuracy', p.accuracy, 0, 255);
+  html += numField('技量', 'skill', p.skill, 0, 255);
+  html += numField('回避', 'evasion', p.evasion, 0, 255);
+  html += numField('直感 (130+で2回行動)', 'intuition', p.intuition, 0, 255);
+  html += `</div></div>`;
+
+  // 地形適応
+  html += `<div class="field-group"><div class="group-title">地形適応</div><div class="terrain-grid">`;
+  html += `<div class="field"><label>空</label>${terrainSelect('terrain.air', p.terrain.air)}</div>`;
+  html += `<div class="field"><label>陸</label>${terrainSelect('terrain.land', p.terrain.land)}</div>`;
+  html += `<div class="field"><label>海</label>${terrainSelect('terrain.sea', p.terrain.sea)}</div>`;
+  html += `<div class="field"><label>宇</label>${terrainSelect('terrain.space', p.terrain.space)}</div>`;
+  html += `</div></div>`;
+
+  // 成長率（packed bytes）
+  html += `<details class="field-group"><summary class="group-title" style="cursor:pointer;">成長率（packed bytes / 上級者向け）</summary><div class="grid" style="margin-top:0.4rem;">`;
+  html += numField('近遠攻撃 packed', 'growth.melee_far_packed', p.growth.melee_far_packed, 0, 255);
+  html += numField('命中技量 packed', 'growth.hit_skill_packed', p.growth.hit_skill_packed, 0, 255);
+  html += numField('SP成長 (00=2 10=3 20=0 30=1)', 'growth.sp_growth', p.growth.sp_growth, 0, 255);
+  html += numField('回避直感 packed', 'growth.evasion_intuition_packed', p.growth.evasion_intuition_packed, 0, 255);
+  html += `</div></details>`;
+
+  // 精神コマンド
+  html += `<div class="field-group"><div class="group-title">精神コマンド (${sp.length} 個 / 最大 9)</div>`;
+  html += `<div id="spirit-slots">`;
+  sp.forEach((s, i) => html += spiritSlotHtml(s, i));
+  html += `</div>`;
+  html += `<button class="btn btn-icon add-slot" data-add="spirit">+ 精神を追加</button>`;
+  html += `</div>`;
+
+  // 特殊技能
+  html += `<div class="field-group"><div class="group-title">特殊技能 (${sk.length} 個 / 精神+技能 合計9まで)</div>`;
+  html += `<div id="skill-slots">`;
+  sk.forEach((s, i) => html += skillSlotHtml(s, i));
+  html += `</div>`;
+  html += `<button class="btn btn-icon add-slot" data-add="skill">+ 技能を追加</button>`;
+  html += `</div>`;
+
+  editorBodyEl.innerHTML = html;
+}
+
+function spiritSlotHtml(s, i) {
+  return `<div class="slot-row spirit" data-slot="spirit" data-i="${i}">`
+    + `<div class="field"><label>${i === 0 ? '名前' : ''}</label><input type="text" list="spirit-names" data-slot-key="name" value="${escapeHtml(s.name)}"></div>`
+    + `<div class="field"><label>${i === 0 ? '習得Lv' : ''}</label><input type="number" data-slot-key="learn_level" value="${s.learn_level}" min="0" max="99" inputmode="numeric"></div>`
+    + `<button class="btn btn-icon btn-danger" data-remove="spirit">×</button>`
+    + `</div>`;
+}
+
+function skillSlotHtml(s, i) {
+  return `<div class="slot-row" data-slot="skill" data-i="${i}">`
+    + `<div class="field"><label>${i === 0 ? '名前' : ''}</label><input type="text" list="skill-names" data-slot-key="name" value="${escapeHtml(s.name)}"></div>`
+    + `<div class="field"><label>${i === 0 ? '技能Lv' : ''}</label><input type="number" data-slot-key="skill_level" value="${s.skill_level}" min="1" max="8" inputmode="numeric"></div>`
+    + `<div class="field"><label>${i === 0 ? '習得Lv' : ''}</label><input type="number" data-slot-key="learn_level" value="${s.learn_level}" min="1" max="99" inputmode="numeric"></div>`
+    + `<button class="btn btn-icon btn-danger" data-remove="skill">×</button>`
+    + `</div>`;
+}
+
+function onEditorClick(e) {
+  const addBtn = e.target.closest('[data-add]');
+  if (addBtn) {
+    const kind = addBtn.dataset.add;
+    const w = state.editing.working;
+    const total = (w.spirits?.length || 0) + (w.skills?.length || 0);
+    if (total >= 9) {
+      window.__dbg('精神+技能の合計は9個までです', true);
+      return;
+    }
+    if (kind === 'spirit') {
+      collectPilotForm(w);
+      w.spirits = w.spirits || [];
+      w.spirits.push({ name: state.spiritNames[0] || '根性', learn_level: 1 });
+    } else {
+      collectPilotForm(w);
+      w.skills = w.skills || [];
+      w.skills.push({ name: state.skillNames[0] || 'ニュータイプ', skill_level: 1, learn_level: 1 });
+    }
+    renderPilotEditor(w);
+    return;
+  }
+  const rmBtn = e.target.closest('[data-remove]');
+  if (rmBtn) {
+    const slot = rmBtn.closest('[data-slot]');
+    const kind = slot.dataset.slot;
+    const idx = parseInt(slot.dataset.i, 10);
+    const w = state.editing.working;
+    collectPilotForm(w);
+    if (kind === 'spirit') w.spirits.splice(idx, 1);
+    else w.skills.splice(idx, 1);
+    renderPilotEditor(w);
+  }
+}
+
+function setByDotted(obj, key, value) {
+  const parts = key.split('.');
+  let o = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (o[parts[i]] == null) o[parts[i]] = {};
+    o = o[parts[i]];
+  }
+  o[parts[parts.length - 1]] = value;
+}
+
+function collectPilotForm(p) {
+  // 単一フィールド
+  editorBodyEl.querySelectorAll('input[data-key], select[data-key]').forEach(el => {
+    const key = el.dataset.key;
+    let v = el.value;
+    if (el.type === 'number') v = parseInt(v, 10) || 0;
+    setByDotted(p, key, v);
+  });
+  // 精神スロット
+  const spirits = [];
+  editorBodyEl.querySelectorAll('[data-slot="spirit"]').forEach(slot => {
+    const name = slot.querySelector('[data-slot-key="name"]').value.trim();
+    const lv = parseInt(slot.querySelector('[data-slot-key="learn_level"]').value, 10) || 0;
+    if (name) spirits.push({ name, learn_level: lv });
+  });
+  p.spirits = spirits;
+  // 技能スロット
+  const skills = [];
+  editorBodyEl.querySelectorAll('[data-slot="skill"]').forEach(slot => {
+    const name = slot.querySelector('[data-slot-key="name"]').value.trim();
+    const sl = parseInt(slot.querySelector('[data-slot-key="skill_level"]').value, 10) || 1;
+    const ll = parseInt(slot.querySelector('[data-slot-key="learn_level"]').value, 10) || 1;
+    if (name) skills.push({ name, skill_level: sl, learn_level: ll });
+  });
+  p.skills = skills;
+}
+
+const MOVE_TYPE_LABEL = {
+  0: '陸', 1: '空陸', 2: '空', 3: '水陸', 4: '水陸空', 5: '陸地中', 6: '空陸地中', 7: '水',
+};
+function moveTypeOptions(v) {
+  let opts = '';
+  for (let i = 0; i <= 7; i++) {
+    opts += `<option value="${i}"${i === v ? ' selected' : ''}>${i}: ${MOVE_TYPE_LABEL[i]}</option>`;
+  }
+  // 想定外値を保持
+  if (v > 7) opts += `<option value="${v}" selected>${v}: (不明)</option>`;
+  return opts;
+}
+
+const TERRAIN_RANKS_UNIT = ['-', 'D', 'C', 'B', 'A'];  // ユニットは A まで
+
+function terrainSelectUnit(key, value) {
+  return `<select data-key="${key}">`
+    + TERRAIN_RANKS_UNIT.map(r => `<option value="${r}"${r === value ? ' selected' : ''}>${r}</option>`).join('')
+    + `</select>`;
+}
+
+function renderUnitEditor(u) {
+  let html = '';
+
+  // メタ（read-only表示）
+  html += `<div class="field-group"><div class="group-title">メタ情報 (read-only)</div><div class="grid">`;
+  html += `<div class="field"><label>オフセット</label><input type="text" value="${escapeHtml(u.offset)}" readonly style="opacity:0.6;"></div>`;
+  html += `<div class="field"><label>レコードサイズ</label><input type="text" value="${u.record_size} bytes" readonly style="opacity:0.6;"></div>`;
+  html += `<div class="field"><label>武器数フィールド</label><input type="text" value="${u.weapon_count_field}" readonly style="opacity:0.6;"></div>`;
+  html += `</div></div>`;
+
+  // 基礎ステータス
+  html += `<div class="field-group"><div class="group-title">基礎ステータス</div><div class="grid">`;
+  html += numField('HP', 'hp', u.hp, 0, 65535);
+  html += numField('EN', 'en', u.en, 0, 255);
+  html += numField('装甲 (実値、10刻み推奨)', 'armor', u.armor, 0, 2550);
+  html += numField('運動性', 'mobility', u.mobility, 0, 255);
+  html += numField('限界反応', 'limit_reaction', u.limit_reaction, 0, 255);
+  html += numField('移動力', 'move_range', u.move_range, 0, 255);
+  html += `<div class="field"><label>移動タイプ</label><select data-key="move_type">${moveTypeOptions(u.move_type)}</select></div>`;
+  html += `</div></div>`;
+
+  // 地形適応
+  html += `<div class="field-group"><div class="group-title">地形適応</div><div class="terrain-grid">`;
+  html += `<div class="field"><label>空</label>${terrainSelectUnit('terrain.air', u.terrain.air)}</div>`;
+  html += `<div class="field"><label>陸</label>${terrainSelectUnit('terrain.land', u.terrain.land)}</div>`;
+  html += `<div class="field"><label>海</label>${terrainSelectUnit('terrain.sea', u.terrain.sea)}</div>`;
+  html += `<div class="field"><label>宇</label>${terrainSelectUnit('terrain.space', u.terrain.space)}</div>`;
+  html += `</div></div>`;
+
+  // 戦闘外
+  html += `<div class="field-group"><div class="group-title">戦闘外</div><div class="grid">`;
+  html += numField('修理費', 'repair_cost', u.repair_cost, 0, 65535);
+  html += numField('獲得資金', 'reward_money', u.reward_money, 0, 65535);
+  html += `</div></div>`;
+
+  // 特殊フラグ
+  html += `<div class="field-group"><div class="group-title">特殊能力フラグ</div><div class="grid">`;
+  html += numField('特殊能力1 (下1桁=9でHP回復)', 'special_1', u.special_1, 0, 255);
+  html += numField('特殊能力2 (上1桁:分身/盾 下1桁:バリア)', 'special_2', u.special_2, 0, 255);
+  html += numField('変形 (transform)', 'transform', u.transform, 0, 255);
+  html += numField('サイズ/BGM', 'size_bgm', u.size_bgm, 0, 255);
+  html += `</div></div>`;
+
+  // メタ的（編集可能）
+  html += `<details class="field-group"><summary class="group-title" style="cursor:pointer;">所属・固定パイロット等（上級者向け）</summary><div class="grid" style="margin-top:0.4rem;">`;
+  html += numField('固定パイロット番号', 'fixed_pilot', u.fixed_pilot, 0, 255);
+  html += numField('所属 (affiliation)', 'affiliation', u.affiliation, 0, 255);
+  html += numField('チーム', 'team', u.team, 0, 255);
+  html += `</div></details>`;
+
+  // 武器スロット
+  const slots = u.weapon_slots || [];
+  html += `<div class="field-group"><div class="group-title">搭載武器 (${slots.length} スロット)</div>`;
+  if (slots.length === 0) {
+    html += `<div class="empty">武器スロットなし</div>`;
+  } else {
+    html += `<div style="font-size:0.75rem;color:#888;margin-bottom:0.4rem;">スロット数の追加/削除は未対応 (tailサイズが変わるため)。WID/AID/CID のみ編集可。</div>`;
+    slots.forEach((s, i) => {
+      const wepName = (state.weaponsByWid[s.weapon_id] || {}).name || '(WID 未解決)';
+      const wepOff = (state.weaponsByWid[s.weapon_id] || {}).offset || '';
+      const wepPower = (state.weaponsByWid[s.weapon_id] || {}).power || '';
+      html += `<div data-slot="weapon" data-i="${i}" style="border:1px solid #2a2a2a;border-radius:6px;padding:0.5rem;margin-bottom:0.4rem;">`;
+      html += `<div style="font-size:0.8rem;color:#6db;margin-bottom:0.3rem;">武器${i+1}: ${escapeHtml(wepName)} <span style="color:#666;">${wepOff} 威${wepPower}</span></div>`;
+      html += `<div class="grid">`;
+      html += `<div class="field"><label>武器ID (WID)</label><input type="number" data-slot-key="weapon_id" value="${s.weapon_id}" min="0" max="1023" inputmode="numeric"></div>`;
+      html += `<div class="field"><label>弾薬ID (AID)</label><input type="number" data-slot-key="ammo_id" value="${s.ammo_id}" min="0" max="63" inputmode="numeric"></div>`;
+      html += `<div class="field"><label>改造ID (CID)</label><input type="number" data-slot-key="custom_id" value="${s.custom_id}" min="0" max="255" inputmode="numeric"></div>`;
+      html += `</div></div>`;
+    });
+  }
+  if (u.weapon_extra_hex) {
+    html += `<div style="font-size:0.75rem;color:#888;margin-top:0.4rem;">extra (変形機の余りバイト): <code>${u.weapon_extra_hex}</code> ← 保持のみ</div>`;
+  }
+  html += `</div>`;
+
+  editorBodyEl.innerHTML = html;
+}
+
+function collectUnitForm(u) {
+  editorBodyEl.querySelectorAll('input[data-key]:not([readonly]), select[data-key]').forEach(el => {
+    const key = el.dataset.key;
+    let v = el.value;
+    if (el.type === 'number' || el.tagName === 'SELECT' && /^\d+$/.test(v)) {
+      v = parseInt(v, 10) || 0;
+    }
+    setByDotted(u, key, v);
+  });
+  // 武器スロット
+  const slots = [];
+  editorBodyEl.querySelectorAll('[data-slot="weapon"]').forEach(slot => {
+    const wid = parseInt(slot.querySelector('[data-slot-key="weapon_id"]').value, 10) || 0;
+    const aid = parseInt(slot.querySelector('[data-slot-key="ammo_id"]').value, 10) || 0;
+    const cid = parseInt(slot.querySelector('[data-slot-key="custom_id"]').value, 10) || 0;
+    slots.push({ weapon_id: wid, ammo_id: aid, custom_id: cid });
+  });
+  u.weapon_slots = slots;
+}
+
+// === Weapon editor ===
+
+const WEAPON_TYPE_LABEL = {
+  0: '遠距離 (0)', 4: '近距離 (4)', 8: 'MAP兵器 (8)', 13: '修理 (DE上位)', 14: '補給 (DF上位)',
+};
+function weaponTypeOpts(v) {
+  let opts = '';
+  for (let i = 0; i <= 15; i++) {
+    const lbl = WEAPON_TYPE_LABEL[i] || `(${i})`;
+    opts += `<option value="${i}"${i === v ? ' selected' : ''}>${lbl}</option>`;
+  }
+  return opts;
+}
+const WEP_ADAPT = ['-', 'C', 'B', 'A'];
+function wepAdaptOpts(key, value) {
+  return `<select data-key="${key}">`
+    + WEP_ADAPT.map(r => `<option value="${r}"${r === value ? ' selected' : ''}>${r}</option>`).join('')
+    + `</select>`;
+}
+
+function boolField(label, key, value) {
+  return `<div class="field"><label>${label}</label>`
+    + `<select data-key="${key}">`
+    + `<option value="false"${!value ? ' selected' : ''}>No</option>`
+    + `<option value="true"${value ? ' selected' : ''}>Yes</option>`
+    + `</select></div>`;
+}
+
+function renderWeaponEditor(w) {
+  let html = '';
+
+  // メタ
+  html += `<div class="field-group"><div class="group-title">メタ情報 (read-only)</div><div class="grid">`;
+  html += `<div class="field"><label>オフセット</label><input type="text" value="${escapeHtml(w.offset)}" readonly style="opacity:0.6;"></div>`;
+  html += `<div class="field"><label>武器ID (WID)</label><input type="text" value="${w.weapon_id}" readonly style="opacity:0.6;"></div>`;
+  html += `<div class="field"><label>武器名</label><input type="text" value="${escapeHtml(w.name)}" readonly style="opacity:0.6;"></div>`;
+  html += `</div></div>`;
+
+  // 基本ステータス
+  html += `<div class="field-group"><div class="group-title">基本ステータス</div><div class="grid">`;
+  html += numField('威力 (power)', 'power', w.power, 0, 65535);
+  html += numField('命中補正 (-128〜127)', 'accuracy', w.accuracy, -128, 127);
+  html += numField('最低射程', 'range_min', w.range_min, 0, 255);
+  html += numField('最大射程', 'range_max', w.range_max, 0, 255);
+  html += numField('弾数 (0=EN消費)', 'ammo', w.ammo, 0, 255);
+  html += numField('消費EN', 'en_cost', w.en_cost, 0, 255);
+  html += numField('必要気力', 'morale', w.morale, 0, 255);
+  html += numField('必要技能ID', 'skill_req', w.skill_req, 0, 255);
+  html += `</div></div>`;
+
+  // 属性フラグ
+  html += `<div class="field-group"><div class="group-title">属性</div><div class="grid">`;
+  html += `<div class="field"><label>武器タイプ</label><select data-key="weapon_type">${weaponTypeOpts(w.weapon_type)}</select></div>`;
+  html += boolField('ビーム属性', 'is_beam', w.is_beam);
+  html += boolField('切り払い対象', 'can_cutoff', w.can_cutoff);
+  html += boolField('非P武器 (移動後攻撃不可)', 'not_p_weapon', w.not_p_weapon);
+  html += numField('武器タイプ追加 (下位4bit)', 'weapon_type_extra', w.weapon_type_extra, 0, 15);
+  html += numField('属性下位5bit', 'attr_low5', w.attr_low5, 0, 31);
+  html += `</div></div>`;
+
+  // 地形適応 (-/C/B/A、ユニットより範囲が狭い)
+  html += `<div class="field-group"><div class="group-title">地形適応 (-/C/B/A)</div><div class="terrain-grid">`;
+  html += `<div class="field"><label>空</label>${wepAdaptOpts('terrain.air', w.terrain.air)}</div>`;
+  html += `<div class="field"><label>陸</label>${wepAdaptOpts('terrain.land', w.terrain.land)}</div>`;
+  html += `<div class="field"><label>海</label>${wepAdaptOpts('terrain.sea', w.terrain.sea)}</div>`;
+  html += `<div class="field"><label>宇</label>${wepAdaptOpts('terrain.space', w.terrain.space)}</div>`;
+  html += `</div></div>`;
+
+  // クリティカル + 改造費
+  html += `<div class="field-group"><div class="group-title">クリティカル・改造費</div><div class="grid">`;
+  html += numField('クリティカル補正 (0-15, テーブル参照)', 'critical', w.critical, 0, 15);
+  html += numField('改造費テーブル (0-7)', 'custom_cost_type', w.custom_cost_type, 0, 15);
+  html += `</div></div>`;
+
+  // アニメ・セリフ
+  html += `<details class="field-group"><summary class="group-title" style="cursor:pointer;">演出系（上級者向け）</summary><div class="grid" style="margin-top:0.4rem;">`;
+  html += numField('セリフ情報ID', 'dialog_id', w.dialog_id, 0, 255);
+  html += numField('アニメID (16bit)', 'anime_id', w.anime_id, 0, 65535);
+  html += `</div></details>`;
+
+  editorBodyEl.innerHTML = html;
+}
+
+function collectWeaponForm(w) {
+  editorBodyEl.querySelectorAll('input[data-key]:not([readonly]), select[data-key]').forEach(el => {
+    const key = el.dataset.key;
+    let v = el.value;
+    if (el.type === 'number') {
+      v = parseInt(v, 10) || 0;
+    } else if (el.tagName === 'SELECT') {
+      if (v === 'true') v = true;
+      else if (v === 'false') v = false;
+      else if (/^-?\d+$/.test(v)) v = parseInt(v, 10);
+    }
+    setByDotted(w, key, v);
+  });
+}
+
+// === パーツ / 誕生日 / 改造 エディタ ===
+const BARRIER_NAMES = ['なし', 'ビームコート', 'Iフィールド', 'オーラバリア', 'ビームバリア(没)'];
+
+function renderPartEditor(p) {
+  let html = '';
+  html += `<div class="field-group"><div class="group-title">${escapeHtml(p.name)} (ID ${p.part_id})</div><div class="grid">`;
+  html += numField('移動力+', 'move', p.move, 0, 255);
+  html += numField('運動性+', 'mobility', p.mobility, 0, 255);
+  html += numField('限界反応+', 'limit_reaction', p.limit_reaction, 0, 255);
+  html += numField('装甲+ (表示は×10)', 'armor', p.armor, 0, 255);
+  html += numField('HP+', 'hp', p.hp, 0, 65535);
+  html += `<div class="field"><label>バリア種別</label><select data-key="barrier_type">`
+    + BARRIER_NAMES.map((n, i) => `<option value="${i}"${p.barrier_type === i ? ' selected' : ''}>${i}: ${n}</option>`).join('')
+    + `</select></div>`;
+  html += `</div></div>`;
+  html += `<div class="field-group"><div class="group-title">メモ</div>`
+    + `<div style="font-size:0.8rem;color:#888;">レーダー(射程+1)・ミノフスキークラフト(飛行)・リペアキット等の「効果種別」はプログラム側処理のためここでは変えられません。`
+    + `バリアの強度・消費ENは「改造」タブで編集できます。バリアジェネレーター(没)はバリア種別4のまま入手手段を用意すれば復活します。</div></div>`;
+  editorBodyEl.innerHTML = html;
+}
+
+function renderBirthdayEditor(b) {
+  let html = '';
+  html += `<div class="field-group"><div class="group-title">${escapeHtml(b.label)} の精神コマンド</div>`;
+  for (let i = 0; i < 6; i++) {
+    const s = b.spirits[i];
+    html += `<div class="slot-row spirit">`
+      + `<div class="field"><label>精神${i + 1}</label><select data-key="spirits.${i}.spirit_id">`
+      + (state.spiritNames || []).map((n, id) => `<option value="${id}"${s.spirit_id === id ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('')
+      + `</select></div>`
+      + `<div class="field"><label>習得Lv</label><input type="number" data-key="spirits.${i}.level" value="${s.level}" min="0" max="99" inputmode="numeric"></div>`
+      + `<div></div></div>`;
+  }
+  html += `</div>`;
+  html += `<div class="field-group"><div class="group-title">メモ</div>`
+    + `<div style="font-size:0.8rem;color:#888;">主人公の誕生日・血液型で決まる精神セット。特殊10件は歴代主人公の誕生日（魂・奇跡持ち）。`
+    + `任意の誕生日に最強セットを移植できます。</div></div>`;
+  editorBodyEl.innerHTML = html;
+}
+
+function gridTable(title, key, rows, rowLabels, colLabels, max) {
+  let html = `<div class="field-group"><div class="group-title">${title}</div>`
+    + `<div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:0.8rem;">`
+    + `<tr><th></th>` + colLabels.map(c => `<th style="padding:2px 4px;color:#888;font-weight:normal;">${c}</th>`).join('') + `</tr>`;
+  rows.forEach((row, r) => {
+    html += `<tr><td style="padding:2px 6px;color:#6db;white-space:nowrap;">${rowLabels[r]}</td>`;
+    row.forEach((v, c) => {
+      html += `<td><input type="number" data-key="${key}.${r}.${c}" value="${v}" min="0" max="${max}" inputmode="numeric" style="width:4.8em;padding:0.3rem;background:#1a1a1a;border:1px solid #3a3a3a;border-radius:4px;color:#e0e0e0;"></td>`;
+    });
+    html += `</tr>`;
+  });
+  return html + `</table></div></div>`;
+}
+
+function renderModsEditor(m) {
+  let html = '';
+  const stages8 = ['無改造', '1段', '2段', '3段', '4段', '5段', '6段', '7段'];
+  const stats = ['HP', 'EN', '装甲', '運動性', '限界反応'];
+  // 強化値: dict[stat] → 8値。テーブル描画のため rows へ
+  const upRows = stats.map(s => m.upgrade_values[s]);
+  html += `<div class="field-group"><div class="group-title">改造強化値（ROM生値。HPは内部単位）</div>`
+    + `<div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:0.8rem;">`
+    + `<tr><th></th>` + stages8.map(c => `<th style="padding:2px 4px;color:#888;font-weight:normal;">${c}</th>`).join('') + `</tr>`
+    + upRows.map((row, r) => `<tr><td style="padding:2px 6px;color:#6db;white-space:nowrap;">${stats[r]}</td>`
+        + row.map((v, c) => `<td><input type="number" data-key="upgrade_values.${stats[r]}.${c}" value="${v}" min="0" max="65535" inputmode="numeric" style="width:4.8em;padding:0.3rem;background:#1a1a1a;border:1px solid #3a3a3a;border-radius:4px;color:#e0e0e0;"></td>`).join('')
+        + `</tr>`).join('')
+    + `</table></div></div>`;
+  const stages7 = ['1段', '2段', '3段', '4段', '5段', '6段', '7段'];
+  html += gridTable('ユニット改造費用', 'unit_costs', m.unit_costs, stages7, stats, 65535);
+  html += gridTable('武器改造費用（列=改造費テーブルID）', 'weapon_costs', m.weapon_costs, stages7,
+                    ['バルカン', 'ハイパー', 'レール', '未4', '未5', '未6', '未7', '一般'], 65535);
+  // バリア強度・消費EN（parts コレクション由来）
+  if (state.partsMeta) {
+    html += `<div class="field-group"><div class="group-title">バリア強度・消費EN（種別1-4が実効）</div>`
+      + `<div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:0.8rem;">`
+      + `<tr><th></th>` + BARRIER_NAMES.slice(1).map(n => `<th style="padding:2px 4px;color:#888;font-weight:normal;">${n}</th>`).join('') + `</tr>`
+      + `<tr><td style="padding:2px 6px;color:#6db;">強度</td>`
+      + [1, 2, 3, 4].map(i => `<td><input type="number" data-barrier="power.${i}" value="${state.partsMeta.barrier_power[i]}" min="0" max="65535" inputmode="numeric" style="width:4.8em;padding:0.3rem;background:#1a1a1a;border:1px solid #3a3a3a;border-radius:4px;color:#e0e0e0;"></td>`).join('')
+      + `</tr><tr><td style="padding:2px 6px;color:#6db;">消費EN</td>`
+      + [1, 2, 3, 4].map(i => `<td><input type="number" data-barrier="en.${i}" value="${state.partsMeta.barrier_en[i]}" min="0" max="65535" inputmode="numeric" style="width:4.8em;padding:0.3rem;background:#1a1a1a;border:1px solid #3a3a3a;border-radius:4px;color:#e0e0e0;"></td>`).join('')
+      + `</tr></table></div></div>`;
+  }
+  editorBodyEl.innerHTML = html;
+  // バリア欄は partsMeta へ直接反映（保存時）
+  editorBodyEl.querySelectorAll('input[data-barrier]').forEach(el => {
+    el.addEventListener('change', () => {
+      const [kind, idx] = el.dataset.barrier.split('.');
+      const v = parseInt(el.value, 10) || 0;
+      if (kind === 'power') state.partsMeta.barrier_power[+idx] = v;
+      else state.partsMeta.barrier_en[+idx] = v;
+      state.modsDirty = true;
+    });
+  });
+}
+
+let pyodide = null;
+
+async function init() {
+  setStatus('Pyodide 本体ロード中...');
+  pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/" });
+
+  setStatus('micropip ロード中...');
+  await pyodide.loadPackage(['micropip']);
+
+  setStatus('依存パッケージ (pydantic, pyyaml) インストール中...');
+  await pyodide.runPythonAsync(`
+    import micropip
+    await micropip.install(['pydantic>=2.0', 'pyyaml>=6.0'])
+  `);
+
+  setStatus('srw4edit wheel インストール中...');
+  await pyodide.runPythonAsync(`
+    import micropip
+    # typer/rich は CLI 用なので skip。dependencies は無視。
+    await micropip.install('./srw4edit-0.7.0-py3-none-any.whl', deps=False)
+    import srw4edit
+    print('srw4edit loaded:', srw4edit.__file__ if hasattr(srw4edit, '__file__') else 'ok')
+  `);
+
+  // PWA向け bytes ベース API ラッパーを Python 側に定義
+  pyodide.runPython(`
+    from srw4edit import pilots as _pilots, units as _units, weapons as _weapons
+    from srw4edit import parts as _parts, modifications as _mods, birthdays as _bd
+    import json as _json
+    import yaml as _yaml
+
+    def pilots_dump_yaml(rom_bytes):
+        coll = _pilots.read_all_pilots(rom_bytes)
+        return _yaml.safe_dump(coll.model_dump(mode='json'), allow_unicode=True, sort_keys=False)
+
+    def units_dump_yaml(rom_bytes):
+        return _units.dump_to_yaml(rom_bytes)
+
+    def weapons_dump_yaml(rom_bytes):
+        return _weapons.dump_to_yaml(rom_bytes)
+
+    def parts_dump_json(rom_bytes):
+        return _json.dumps(_parts.read_parts(rom_bytes).model_dump(mode='json'), ensure_ascii=False)
+
+    def mods_dump_json(rom_bytes):
+        return _json.dumps(_mods.read_modifications(rom_bytes).model_dump(mode='json'), ensure_ascii=False)
+
+    def birthdays_dump_json(rom_bytes):
+        return _json.dumps(_bd.read_birthdays(rom_bytes).model_dump(mode='json'), ensure_ascii=False)
+
+    def apply_all(rom_bytes, pilots_json, units_json, weapons_json,
+                  parts_json=None, mods_json=None, birthdays_json=None):
+        """JS から渡された JSON 文字列で全変更を ROM に焼き込む"""
+        import json
+        pilots_data = json.loads(pilots_json)
+        units_data = json.loads(units_json)
+        weapons_data = json.loads(weapons_json)
+        for p in pilots_data.get('pilots', []):
+            p.pop('_dirty', None)
+        for u in units_data.get('units', []):
+            u.pop('_dirty', None)
+        for w in weapons_data.get('weapons', []):
+            w.pop('_dirty', None)
+        coll_p = _pilots.PilotCollection.model_validate(pilots_data)
+        coll_u = _units.UnitCollection.model_validate(units_data)
+        coll_w = _weapons.WeaponCollection.model_validate(weapons_data)
+        new_rom = _pilots.write_all_pilots(rom_bytes, coll_p)
+        new_rom = _units.apply_units(new_rom, coll_u)
+        new_rom = _weapons.apply_weapons(new_rom, coll_w)
+        if parts_json:
+            new_rom = _parts.apply_parts(new_rom, _parts.PartCollection.model_validate(json.loads(parts_json)))
+        if mods_json:
+            new_rom = _mods.apply_modifications(new_rom, _mods.Modifications.model_validate(json.loads(mods_json)))
+        if birthdays_json:
+            new_rom = _bd.apply_birthdays(new_rom, _bd.BirthdayCollection.model_validate(json.loads(birthdays_json)))
+        return new_rom
+
+    def spirit_name_list():
+        return list(_pilots._spirit_id_to_name().values())
+
+    def skill_base_name_list():
+        names = set()
+        for v in _pilots._skill_id_to_name().values():
+            if "Lv" in v:
+                names.add(v.rpartition("Lv")[0])
+            else:
+                names.add(v)
+        return sorted(names)
+  `);
+
+  // 精神・技能名 datalist
+  const spiritNames = pyodide.runPython('spirit_name_list()').toJs();
+  const skillNames = pyodide.runPython('skill_base_name_list()').toJs();
+  document.getElementById('spirit-names').innerHTML =
+    spiritNames.map(n => `<option value="${escapeHtml(n)}">`).join('');
+  document.getElementById('skill-names').innerHTML =
+    skillNames.map(n => `<option value="${escapeHtml(n)}">`).join('');
+  state.spiritNames = Array.from(spiritNames);
+  state.skillNames = Array.from(skillNames);
+
+  setStatus('準備完了。ROMをドロップしてください。');
+  splash.style.display = 'none';
+  dropzone.classList.add('ready');
+}
+
+async function handleROM(file) {
+  setStatus(`ROM 読み込み中: ${file.name} (${file.size.toLocaleString()} bytes)`);
+  splash.style.display = 'flex';
+  dropzone.classList.remove('ready');
+  try {
+    const buf = await file.arrayBuffer();
+    let u8 = new Uint8Array(buf);
+    if (u8.length === 3_145_728 + 512) u8 = u8.slice(512);  // SMCヘッダ剥がし
+    if (u8.length !== 3_145_728) throw new Error(`ROM サイズ異常: ${u8.length} bytes (期待 3145728)`);
+    state.romBytes = u8;
+    state.romName = file.name;
+    pyodide.globals.set('rom_bytes_js', u8);
+    await pyodide.runPythonAsync(`
+      rom_bytes = bytes(rom_bytes_js.to_py())
+      assert len(rom_bytes) == 3_145_728, f'unexpected ROM size: {len(rom_bytes)}'
+    `);
+
+    setStatus('パイロットdump 実行中...');
+    pyodide.runPython('pilot_yaml = pilots_dump_yaml(rom_bytes)');
+    const pilotYaml = pyodide.globals.get('pilot_yaml');
+    const pilotData = pyodide.runPython(`
+      import yaml
+      yaml.safe_load(pilot_yaml)
+    `).toJs({ dict_converter: Object.fromEntries });
+
+    setStatus('ユニットdump 実行中...');
+    pyodide.runPython('unit_yaml = units_dump_yaml(rom_bytes)');
+    const unitYaml = pyodide.globals.get('unit_yaml');
+    const unitData = pyodide.runPython(`
+      import yaml
+      yaml.safe_load(unit_yaml)
+    `).toJs({ dict_converter: Object.fromEntries });
+
+    setStatus('武器dump 実行中...');
+    pyodide.runPython('weapon_yaml = weapons_dump_yaml(rom_bytes)');
+    const weaponYaml = pyodide.globals.get('weapon_yaml');
+    const weaponData = pyodide.runPython(`
+      import yaml
+      yaml.safe_load(weapon_yaml)
+    `).toJs({ dict_converter: Object.fromEntries });
+
+    const pilotCount = pilotData.pilots.length;
+    const unitCount = unitData.units.length;
+
+    console.log('=== Phase 1a 結果 ===');
+    console.log('Pilots:', pilotCount, pilotData);
+    console.log('Units:', unitCount, unitData);
+    console.log('--- Pilot YAML (head 2000ch) ---');
+    console.log(pilotYaml.slice(0, 2000));
+    console.log('--- Unit YAML (head 2000ch) ---');
+    console.log(unitYaml.slice(0, 2000));
+
+    setStatus('パーツ・改造・誕生日 dump 実行中...');
+    const partsData = JSON.parse(pyodide.runPython('parts_dump_json(rom_bytes)'));
+    const modsData = JSON.parse(pyodide.runPython('mods_dump_json(rom_bytes)'));
+    const bdData = JSON.parse(pyodide.runPython('birthdays_dump_json(rom_bytes)'));
+
+    const weaponCount = weaponData.weapons.length;
+    document.getElementById('pilot-count').textContent = pilotCount;
+    document.getElementById('unit-count').textContent = unitCount;
+    document.getElementById('weapon-count').textContent = weaponCount;
+
+    state.pilots = pilotData.pilots;
+    state.units = unitData.units;
+    state.weapons = weaponData.weapons;
+    state.parts = partsData.parts;
+    state.partsMeta = { barrier_power: partsData.barrier_power, barrier_en: partsData.barrier_en };
+    state.mods = modsData;
+    state.modsDirty = false;
+    state.birthdays = bdData.birthdays;
+    // 武器の offset→object 高速ルックアップ。WIDからは別途武器情報オフセット配列を辿る必要があるが、
+    // それは dump_weapons の時点で WID と offset の対応が weapon.weapon_id に入っている
+    state.weaponsByOffset = {};
+    state.weaponsByWid = {};
+    for (const w of state.weapons) {
+      state.weaponsByOffset[w.offset] = w;
+      state.weaponsByWid[w.weapon_id] = w;
+    }
+    renderList();
+    updateDirtyMeta();
+
+    result.classList.add('show');
+    splash.style.display = 'none';
+    dropzone.classList.add('ready');
+    setStatus('読み込み完了。一覧から絞り込んでください。');
+  } catch (e) {
+    console.error(e);
+    setStatus('エラー: ' + e.message);
+    splash.style.display = 'flex';
+  }
+}
+
+dropzone.addEventListener('click', (e) => {
+  if (e.target.tagName !== 'INPUT') document.getElementById('rom-input').click();
+});
+document.getElementById('rom-input').addEventListener('change', (e) => {
+  if (e.target.files[0]) handleROM(e.target.files[0]);
+});
+['dragenter', 'dragover'].forEach(ev =>
+  dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add('dragover'); })
+);
+['dragleave', 'drop'].forEach(ev =>
+  dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); })
+);
+dropzone.addEventListener('drop', (e) => {
+  const f = e.dataTransfer.files[0];
+  if (f) handleROM(f);
+});
+
+window.__handleROM = handleROM;  // 動作確認用フック
+window.__state = state;
+
+// service worker 登録（オフライン対応）。https か localhost のみ
+if ('serviceWorker' in navigator
+    && (location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname))) {
+  navigator.serviceWorker.register('./sw.js').then(
+    () => window.__dbg('service worker 登録OK'),
+    (e) => window.__dbg('service worker 登録失敗: ' + e.message, true)
+  );
+}
+
+init().catch(e => {
+  console.error(e);
+  setStatus('初期化失敗: ' + e.message);
+});
+</script>
+</body>
+</html>
