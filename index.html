@@ -84,7 +84,7 @@
 </style>
 </head>
 <body>
-<header><h1>第4次スーパーロボット大戦 改造エディタ (v0.6 / 武器統合)</h1></header>
+<header><h1>第4次スーパーロボット大戦 改造エディタ (v0.7)</h1></header>
 <main>
   <div id="splash">
     <div class="spinner"></div>
@@ -139,7 +139,7 @@
 // グローバルエラー捕捉（type=moduleのscript内エラーもここで拾える）
 const debugEl = document.getElementById('debug');
 function dbg(msg, isError) {
-  debugEl.style.display = 'block';
+  if (isError) debugEl.style.display = 'block';  // エラー時のみ表示（ログ自体は常に蓄積）
   debugEl.style.color = isError ? '#faa' : '#afa';
   const line = document.createElement('div');
   line.textContent = '[' + new Date().toISOString().slice(11,19) + '] ' + msg;
