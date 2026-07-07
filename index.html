@@ -84,7 +84,7 @@
 </style>
 </head>
 <body>
-<header><h1>第4次スーパーロボット大戦 改造エディタ (v0.7.2)</h1></header>
+<header><h1>第4次スーパーロボット大戦 改造エディタ (v0.7.3)</h1></header>
 <main>
   <div id="splash">
     <div class="spinner"></div>
@@ -1012,6 +1012,14 @@ function renderSystemsEditor(s) {
   html += numField('必要直感値 (素130。上げると希少化)', 'double_act_intuition', s.double_act_intuition, 1, 255);
   html += `</div></div>`;
 
+  html += `<div class="field-group"><div class="group-title">底力（バグ修正）</div><div class="grid">`;
+  html += `<div class="field"><label>発動HP条件（素は1/8=ほぼ瀕死限定）</label><select data-key="guts_hp_divisor">`
+    + [[8, '1/8（素のまま）'], [4, '1/4（シリーズ通例・推奨）'], [2, '1/2（大甘）']]
+      .map(([v, l]) => `<option value="${v}"${s.guts_hp_divisor === v ? ' selected' : ''}>${l}</option>`).join('')
+    + `</select></div>`;
+  html += numField('発動時のクリティカル率加算 (素50)', 'guts_crit_bonus', s.guts_crit_bonus, 0, 255);
+  html += `</div><div style="font-size:0.8rem;color:#888;margin-top:0.4rem;">第4次の底力は「HPが最大の1/8以下でクリティカル率+50」という実装で、発動条件が厳しすぎて死に技能になっている（2026-07-08解析）。1/4にするとシリーズの体感に近づきます。</div></div>`;
+
   html += `<div class="field-group"><div class="group-title">精神コマンド消費SP</div><div class="grid">`;
   for (let i = 1; i <= 30; i++) {
     const nm = (state.spiritNames && state.spiritNames[i]) || `精神${i}`;
@@ -1054,7 +1062,7 @@ async function init() {
   await pyodide.runPythonAsync(`
     import micropip
     # typer/rich は CLI 用なので skip。dependencies は無視。
-    await micropip.install('./srw4edit-0.7.2-py3-none-any.whl', deps=False)
+    await micropip.install('./srw4edit-0.7.3-py3-none-any.whl', deps=False)
     import srw4edit
     print('srw4edit loaded:', srw4edit.__file__ if hasattr(srw4edit, '__file__') else 'ok')
   `);
