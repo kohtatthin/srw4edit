@@ -92,8 +92,8 @@
   </div>
   <label id="dropzone" for="rom-input">
     <p>📂 ROMファイル (.smc) をここにドロップ</p>
-    <p class="hint">またはタップして選択 / 3MB V1.1 のみ対応</p>
-    <input id="rom-input" type="file" accept=".smc,.sfc">
+    <p class="hint">またはタップして選択 / 3MB V1.1 のみ対応（zipは事前に解凍してください）</p>
+    <input id="rom-input" type="file">
   </label>
   <section id="result">
     <div class="stats" style="grid-template-columns: 1fr 1fr 1fr;">
@@ -1180,9 +1180,8 @@ async function handleROM(file) {
   }
 }
 
-dropzone.addEventListener('click', (e) => {
-  if (e.target.tagName !== 'INPUT') document.getElementById('rom-input').click();
-});
+// クリックでの入力起動は <label for="rom-input"> の標準動作に任せる
+// （JSでも click() すると iOS Safari でピッカーが二重起動→即クローズする）
 document.getElementById('rom-input').addEventListener('change', (e) => {
   if (e.target.files[0]) handleROM(e.target.files[0]);
 });
