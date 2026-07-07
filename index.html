@@ -84,7 +84,7 @@
 </style>
 </head>
 <body>
-<header><h1>第4次スーパーロボット大戦 改造エディタ (v0.7)</h1></header>
+<header><h1>第4次スーパーロボット大戦 改造エディタ (v0.7.1)</h1></header>
 <main>
   <div id="splash">
     <div class="spinner"></div>
@@ -1002,7 +1002,7 @@ async function init() {
   await pyodide.runPythonAsync(`
     import micropip
     # typer/rich は CLI 用なので skip。dependencies は無視。
-    await micropip.install('./srw4edit-0.7.0-py3-none-any.whl', deps=False)
+    await micropip.install('./srw4edit-0.7.1-py3-none-any.whl', deps=False)
     import srw4edit
     print('srw4edit loaded:', srw4edit.__file__ if hasattr(srw4edit, '__file__') else 'ok')
   `);
