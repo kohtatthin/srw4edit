@@ -84,7 +84,7 @@
 </style>
 </head>
 <body>
-<header><h1>第4次スーパーロボット大戦 改造エディタ (v0.7.1)</h1></header>
+<header><h1>第4次スーパーロボット大戦 改造エディタ (v0.7.2)</h1></header>
 <main>
   <div id="splash">
     <div class="spinner"></div>
@@ -113,6 +113,7 @@
       <div class="tab" id="tab-parts" data-tab="parts" role="tab">パーツ</div>
       <div class="tab" id="tab-mods" data-tab="mods" role="tab">改造</div>
       <div class="tab" id="tab-birthdays" data-tab="birthdays" role="tab">誕生日</div>
+      <div class="tab" id="tab-systems" data-tab="systems" role="tab">システム</div>
     </div>
     <div class="search-wrap">
       <input id="search" type="search" placeholder="名前で検索 (例: アムロ, νガンダム)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
@@ -179,6 +180,8 @@ const state = {
   mods: null,        // 改造テーブル一式（単一オブジェクト）
   modsDirty: false,
   birthdays: [],
+  systems: null,     // システム設定（単一オブジェクト）
+  systemsDirty: false,
   weaponsByOffset: {},  // $XXXXX → weapon オブジェクト
   romBytes: null,
   romName: '',
@@ -199,6 +202,12 @@ function renderList() {
     listMetaEl.textContent = '';
     listEl.innerHTML = `<div class="row" data-key="mods"><div class="row-name">改造テーブルを編集（強化値・費用・バリア）</div>`
       + `<div class="row-stats">${state.modsDirty ? '<span style="color:#fa6">●変更あり</span>' : ''}</div></div>`;
+    return;
+  }
+  if (state.tab === 'systems') {
+    listMetaEl.textContent = '';
+    listEl.innerHTML = `<div class="row" data-key="systems"><div class="row-name">システム設定（2回行動・精神SP・限界パッチ・戦闘係数）</div>`
+      + `<div class="row-stats">${state.systemsDirty ? '<span style="color:#fa6">●変更あり</span>' : ''}</div></div>`;
     return;
   }
   const src = state.tab === 'pilots' ? state.pilots
@@ -318,10 +327,11 @@ document.getElementById('editor-save').addEventListener('click', saveEditor);
 document.getElementById('editor-body').addEventListener('click', onEditorClick);
 
 function openEditor(type, key) {
-  if (type === 'mods') {
-    state.editing = { type: 'mods', index: 0, working: JSON.parse(JSON.stringify(state.mods)) };
-    editorTitleEl.textContent = '改造テーブル';
-    renderModsEditor(state.editing.working);
+  if (type === 'mods' || type === 'systems') {
+    const src = type === 'mods' ? state.mods : state.systems;
+    state.editing = { type, index: 0, working: JSON.parse(JSON.stringify(src)) };
+    editorTitleEl.textContent = type === 'mods' ? '改造テーブル' : 'システム設定';
+    (type === 'mods' ? renderModsEditor : renderSystemsEditor)(state.editing.working);
     result.classList.remove('show');
     editorEl.classList.add('show');
     window.scrollTo(0, 0);
@@ -373,14 +383,14 @@ function saveEditor() {
   if (!state.editing) return;
   const { type, index, working } = state.editing;
 
-  if (type === 'mods') {
+  if (type === 'mods' || type === 'systems') {
     collectGenericForm(working);
-    state.mods = working;
-    state.modsDirty = true;
+    if (type === 'mods') { state.mods = working; state.modsDirty = true; }
+    else { state.systems = working; state.systemsDirty = true; }
     renderList();
     updateDirtyMeta();
     closeEditor();
-    setStatus('保存: 改造テーブル (メモリ上、ダウンロードでROMに焼き込み)');
+    setStatus(`保存: ${type === 'mods' ? '改造テーブル' : 'システム設定'} (メモリ上、ダウンロードでROMに焼き込み)`);
     return;
   }
   if (type === 'pilots') {
@@ -417,8 +427,10 @@ function collectGenericForm(obj) {
     let v = el.value;
     if (el.type === 'number' || el.dataset.type === 'int') {
       v = parseInt(v, 10) || 0;
-    } else if (el.tagName === 'SELECT' && /^-?\d+$/.test(v)) {
-      v = parseInt(v, 10);
+    } else if (el.tagName === 'SELECT') {
+      if (v === 'true') v = true;
+      else if (v === 'false') v = false;
+      else if (/^-?\d+$/.test(v)) v = parseInt(v, 10);
     }
     setByDotted(obj, key, v);
   });
@@ -430,7 +442,8 @@ function dirtyCount() {
   const dw = state.weapons.filter(w => w._dirty).length;
   const dx = state.parts.filter(p => p._dirty).length
            + state.birthdays.filter(b => b._dirty).length
-           + (state.modsDirty ? 1 : 0);
+           + (state.modsDirty ? 1 : 0)
+           + (state.systemsDirty ? 1 : 0);
   return { dp, du, dw, dx };
 }
 
@@ -461,7 +474,8 @@ async function downloadModifiedROM() {
     pyodide.globals.set('parts_json', JSON.stringify({ parts: partsClean, barrier_power: state.partsMeta.barrier_power, barrier_en: state.partsMeta.barrier_en }));
     pyodide.globals.set('mods_json', JSON.stringify(state.mods));
     pyodide.globals.set('birthdays_json', JSON.stringify({ birthdays: state.birthdays.map(b => { const { _dirty, ...rest } = b; return rest; }) }));
-    const resultProxy = pyodide.runPython(`apply_all(bytes(rom_orig_js.to_py()), pilots_json, units_json, weapons_json, parts_json, mods_json, birthdays_json)`);
+    pyodide.globals.set('systems_json', JSON.stringify(state.systems));
+    const resultProxy = pyodide.runPython(`apply_all(bytes(rom_orig_js.to_py()), pilots_json, units_json, weapons_json, parts_json, mods_json, birthdays_json, systems_json)`);
     // Python bytes -> JS bytes
     const newBytes = resultProxy.toJs();
     resultProxy.destroy?.();
@@ -502,6 +516,8 @@ document.getElementById('reload-btn').addEventListener('click', () => {
   state.mods = null;
   state.modsDirty = false;
   state.birthdays = [];
+  state.systems = null;
+  state.systemsDirty = false;
   state.romBytes = null;
   state.romName = '';
   result.classList.remove('show');
@@ -983,6 +999,42 @@ function renderModsEditor(m) {
   });
 }
 
+function renderSystemsEditor(s) {
+  let html = '';
+  html += `<div class="field-group"><div class="group-title">限界キャップ撤廃パッチ（実験的）</div><div class="grid">`;
+  html += `<div class="field"><label>命中・回避のクランプを機体限界→固定255に</label><select data-key="limit_cap_removed">`
+    + `<option value="false"${!s.limit_cap_removed ? ' selected' : ''}>OFF（素のまま）</option>`
+    + `<option value="true"${s.limit_cap_removed ? ' selected' : ''}>ON（鍛えた分だけ伸びる）</option>`
+    + `</select></div></div>`
+    + `<div style="font-size:0.8rem;color:#888;margin-top:0.4rem;">戦闘予測ルーチン4箇所のコード書き換え。静的検証済み・長時間プレイ検証は未了。OFFに戻せば原本と完全一致に復元されます。</div></div>`;
+
+  html += `<div class="field-group"><div class="group-title">2回行動</div><div class="grid">`;
+  html += numField('必要直感値 (素130。上げると希少化)', 'double_act_intuition', s.double_act_intuition, 1, 255);
+  html += `</div></div>`;
+
+  html += `<div class="field-group"><div class="group-title">精神コマンド消費SP</div><div class="grid">`;
+  for (let i = 1; i <= 30; i++) {
+    const nm = (state.spiritNames && state.spiritNames[i]) || `精神${i}`;
+    html += numField(nm, `spirit_sp.${i}`, s.spirit_sp[i], 1, 255);
+  }
+  html += `</div></div>`;
+
+  html += `<div class="field-group"><div class="group-title">戦闘係数（上級者向け）</div>`;
+  const rows = [
+    ['クリティカル補正 (素 -10/0/+10/+20/+30)', 'critical_mod', s.critical_mod, -128, 127],
+    ['地形適応倍率 (素 0/60/80/100/120)', 'terrain_mult', s.terrain_mult, 0, 255],
+    ['武器地形倍率 (素 0/40/70/100)', 'weapon_terrain_mult', s.weapon_terrain_mult, 0, 255],
+    ['サイズ差補正 (素 80/100/120/140)', 'size_mod', s.size_mod, 0, 255],
+  ];
+  for (const [label, key, arr, mn, mx] of rows) {
+    html += `<div style="font-size:0.8rem;color:#6db;margin:0.5rem 0 0.2rem 0;">${label}</div><div class="grid">`;
+    arr.forEach((v, i) => { html += numField(`#${i}`, `${key}.${i}`, v, mn, mx); });
+    html += `</div>`;
+  }
+  html += `</div>`;
+  editorBodyEl.innerHTML = html;
+}
+
 let pyodide = null;
 
 async function init() {
@@ -1002,7 +1054,7 @@ async function init() {
   await pyodide.runPythonAsync(`
     import micropip
     # typer/rich は CLI 用なので skip。dependencies は無視。
-    await micropip.install('./srw4edit-0.7.1-py3-none-any.whl', deps=False)
+    await micropip.install('./srw4edit-0.7.2-py3-none-any.whl', deps=False)
     import srw4edit
     print('srw4edit loaded:', srw4edit.__file__ if hasattr(srw4edit, '__file__') else 'ok')
   `);
@@ -1011,6 +1063,7 @@ async function init() {
   pyodide.runPython(`
     from srw4edit import pilots as _pilots, units as _units, weapons as _weapons
     from srw4edit import parts as _parts, modifications as _mods, birthdays as _bd
+    from srw4edit import systems as _sys
     import json as _json
     import yaml as _yaml
 
@@ -1033,8 +1086,11 @@ async function init() {
     def birthdays_dump_json(rom_bytes):
         return _json.dumps(_bd.read_birthdays(rom_bytes).model_dump(mode='json'), ensure_ascii=False)
 
+    def systems_dump_json(rom_bytes):
+        return _json.dumps(_sys.read_systems(rom_bytes).model_dump(mode='json'), ensure_ascii=False)
+
     def apply_all(rom_bytes, pilots_json, units_json, weapons_json,
-                  parts_json=None, mods_json=None, birthdays_json=None):
+                  parts_json=None, mods_json=None, birthdays_json=None, systems_json=None):
         """JS から渡された JSON 文字列で全変更を ROM に焼き込む"""
         import json
         pilots_data = json.loads(pilots_json)
@@ -1058,6 +1114,8 @@ async function init() {
             new_rom = _mods.apply_modifications(new_rom, _mods.Modifications.model_validate(json.loads(mods_json)))
         if birthdays_json:
             new_rom = _bd.apply_birthdays(new_rom, _bd.BirthdayCollection.model_validate(json.loads(birthdays_json)))
+        if systems_json:
+            new_rom = _sys.apply_systems(new_rom, _sys.SystemSettings.model_validate(json.loads(systems_json)))
         return new_rom
 
     def spirit_name_list():
@@ -1144,6 +1202,7 @@ async function handleROM(file) {
     const partsData = JSON.parse(pyodide.runPython('parts_dump_json(rom_bytes)'));
     const modsData = JSON.parse(pyodide.runPython('mods_dump_json(rom_bytes)'));
     const bdData = JSON.parse(pyodide.runPython('birthdays_dump_json(rom_bytes)'));
+    const sysData = JSON.parse(pyodide.runPython('systems_dump_json(rom_bytes)'));
 
     const weaponCount = weaponData.weapons.length;
     document.getElementById('pilot-count').textContent = pilotCount;
@@ -1158,6 +1217,8 @@ async function handleROM(file) {
     state.mods = modsData;
     state.modsDirty = false;
     state.birthdays = bdData.birthdays;
+    state.systems = sysData;
+    state.systemsDirty = false;
     // 武器の offset→object 高速ルックアップ。WIDからは別途武器情報オフセット配列を辿る必要があるが、
     // それは dump_weapons の時点で WID と offset の対応が weapon.weapon_id に入っている
     state.weaponsByOffset = {};

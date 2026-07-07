@@ -1,12 +1,12 @@
 // srw4edit PWA service worker — オフライン対応
 // index.html はネット優先（更新が届く）、それ以外（wheel / Pyodide CDN / PyPI）はキャッシュ優先
-const CACHE = 'srw4edit-v0.7.1';
+const CACHE = 'srw4edit-v0.7.2';
 const PRECACHE = [
   './',
   './index.html',
   './manifest.json',
   './icon.png',
-  './srw4edit-0.7.1-py3-none-any.whl',
+  './srw4edit-0.7.2-py3-none-any.whl',
 ];
 
 self.addEventListener('install', (e) => {
